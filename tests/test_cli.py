@@ -1,0 +1,95 @@
+"""CLI smoke tests against synthetic fixtures — doctor, pack, read-only commands,
+and the fail-safe refusal on mutating commands without a configured corpus."""
+import os
+
+from context_engine import config
+from context_engine.cli import main
+
+
+def _write_config(cfg, tmp_path):
+    path = tmp_path / "context-engine.yml"
+    path.write_text(config.dump_config(cfg), encoding="utf-8")
+    return str(path)
+
+
+def test_doctor_runs(capsys):
+    rc = main(["doctor"])
+    out = capsys.readouterr().out
+    assert rc in (0, 1)
+    assert "context-engine" in out
+    assert "doctor status" in out
+
+
+def test_doctor_json(capsys):
+    rc = main(["doctor", "--json"])
+    out = capsys.readouterr().out
+    assert rc in (0, 1)
+    assert '"python"' in out
+
+
+def test_pack_writes_file(tmp_path, capsys):
+    out_file = tmp_path / "pack.md"
+    rc = main(["pack", "--project", "Demo", "--role", "execution",
+               "--task", "do the thing", "--out", str(out_file)])
+    assert rc == 0
+    content = out_file.read_text(encoding="utf-8")
+    assert "# Context Pack — Demo / execution" in content
+    assert "## Next action" in content
+
+
+def test_pack_unknown_role(capsys):
+    rc = main(["pack", "--project", "P", "--role", "bogus", "--task", "t"])
+    assert rc == 2
+
+
+def test_delta_without_config_refuses(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # no discoverable config here
+    rc = main(["delta"])
+    assert rc == 2  # ConfigError -> exit 2
+
+
+def test_delta_with_config(tmp_path, synth_corpus):
+    cfg, _ = synth_corpus
+    live = cfg.live_roots[0]
+    with open(os.path.join(live, "a.md"), "w", encoding="utf-8") as fh:
+        fh.write("# a\n\n## s\nbody\n")
+    cfg_path = _write_config(cfg, tmp_path)
+    rc = main(["delta", "--config", cfg_path, "--json"])
+    assert rc == 0
+
+
+def test_observe_with_config(tmp_path, synth_corpus, capsys):
+    cfg, _ = synth_corpus
+    live = cfg.live_roots[0]
+    with open(os.path.join(live, "a.md"), "w", encoding="utf-8") as fh:
+        fh.write("# a\n\n## s\nbody\n")
+    cfg_path = _write_config(cfg, tmp_path)
+    rc = main(["observe", "--config", cfg_path])
+    assert rc == 0
+
+
+def test_cadence_dry_run_with_config(tmp_path, synth_corpus, capsys):
+    cfg, _ = synth_corpus
+    cfg_path = _write_config(cfg, tmp_path)
+    rc = main(["cadence", "--dry-run", "--config", cfg_path])
+    assert rc == 0
+    assert "cadence DRY-RUN" in capsys.readouterr().out
+
+
+def test_baseline_apply_without_config_refuses(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    rc = main(["baseline", "--apply"])
+    assert rc == 2
+
+
+def test_audit_hot_with_config(tmp_path, synth_corpus):
+    cfg, _ = synth_corpus
+    # one clean artifact -> PASS
+    ref = os.path.join(cfg.hot_root, "reference")
+    os.makedirs(ref, exist_ok=True)
+    with open(os.path.join(ref, "good.md"), "w", encoding="utf-8") as fh:
+        fh.write("---\nid: KB-g\nstatus: seeded\ntype: reference-note\n"
+                 "sources:\n  - sha256: AB\n---\n\n# G\n\n## S\nshort\n")
+    cfg_path = _write_config(cfg, tmp_path)
+    rc = main(["audit", "hot", "--config", cfg_path])
+    assert rc == 0

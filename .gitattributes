@@ -1,0 +1,18 @@
+# Normalize line endings: store text as LF in the repo, regardless of host OS.
+* text=auto eol=lf
+
+# Explicit text types
+*.py    text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.txt   text eol=lf
+
+# Binary types (never normalize)
+*.png   binary
+*.jpg   binary
+*.gz    binary
+*.zip   binary
+*.sqlite binary

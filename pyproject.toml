@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "context-engine"
+version = "0.5.0"
+description = "A governed agentic memory/context-control engine: hot/cold recall, sha256 provenance, cadence, gating, and role-specific context packs."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "context-engine maintainers" }]
+keywords = [
+    "agents",
+    "memory",
+    "context",
+    "retrieval",
+    "provenance",
+    "rag",
+    "llm",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+# Runtime dependencies are deliberately minimal. PyYAML is the only hard
+# dependency: it parses the YAML engine config and artifact frontmatter, and is
+# already the de-facto serialization format for the recall layer's collection
+# definitions. Everything else (hashing, sqlite provenance index, CLI parsing)
+# is standard library.
+dependencies = [
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+context-engine = "context_engine.cli:main"
+
+[project.urls]
+Homepage = "https://example.invalid/context-engine"
+Documentation = "https://example.invalid/context-engine/tree/main/docs"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+# Lets the suite import the package straight from src/ without an install.
+pythonpath = ["src"]

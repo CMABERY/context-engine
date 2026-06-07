@@ -1,0 +1,68 @@
+# ---------------------------------------------------------------------------
+# Private corpus / memory data — NEVER commit. The context engine operates over
+# a private corpus that lives OUTSIDE this repository. These patterns block the
+# common landing spots so corpus content, hot/cold artifacts, transcripts,
+# provenance manifests, and indexes can never be staged from a working tree.
+# See docs/security-and-privacy.md.
+# ---------------------------------------------------------------------------
+_organized/
+_hot/
+_held/
+_inbox/
+_provenance/
+transcripts/
+projects/
+archives/
+Archives/
+corpus/
+secrets/
+backups/
+
+# Generated corpus artifacts, indexes, and provenance ledgers
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.jsonl
+*.gate.json
+qmd_output_samples/
+
+# Archives / backups
+*.tar.gz
+*.tgz
+*.zip
+*.bak
+
+# Secrets / environment
+.env
+.env.*
+*.pem
+*.key
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.pytmp/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------------------------------------------------------------------------
+# Editors / OS
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

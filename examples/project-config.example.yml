@@ -1,0 +1,42 @@
+# project-config.example.yml — per-project pack defaults (EXAMPLE / illustrative)
+#
+# A project config layers ON TOP of the engine config (context-engine.yml). It
+# pins the defaults a single project wants when compiling context packs, so
+# agents working in that project get consistent, scoped memory projections.
+#
+# NOTE: this is the convention targeted by the v0.3 "project adapters" milestone
+# (see docs/roadmap.md). The v0.x CLI takes --project/--role/--task directly;
+# this file documents the intended shape so adapters can adopt it.
+
+project: billing-service        # logical project name (the --project value)
+
+# Default objective injected into every pack for this project unless overridden.
+objective: >
+  Maintain and evolve the billing service using only governed, cited memory.
+
+# Pack sizing defaults (per role). The compiler caps hot/cold inclusions.
+packs:
+  defaults:
+    max_hot: 8
+    max_cold: 3
+  roles:
+    execution:
+      max_hot: 6
+      max_cold: 0            # execution never reads cold (principle 6)
+    verification:
+      max_hot: 4
+      max_cold: 5            # verification is an admissible reason for cold
+
+# Recall scoping hints (advisory): bias retrieval toward these hot domains.
+prefer_domains:
+  - decisions
+  - reference
+
+# Project-specific exclusions appended to every pack's Exclusions section.
+exclusions:
+  - Secrets, credentials, and customer PII are never admissible in a pack.
+  - Pricing experiments not yet promoted to the hot decisions surface.
+
+# Standing assumptions recorded in every pack for this project.
+assumptions:
+  - The hot surface reflects the latest promoted decisions as of compile time.

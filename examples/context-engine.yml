@@ -1,0 +1,79 @@
+# context-engine.yml — engine configuration (EXAMPLE)
+#
+# Copy this file, point the paths at YOUR corpus, and pass it with --config:
+#
+#     context-engine cadence --dry-run --config ./context-engine.yml
+#
+# SAFETY: the engine ships NO default config. Every path below is a generic
+# placeholder. Mutating commands (cadence/baseline --apply) refuse to run until
+# the required corpus paths are set. The corpus lives OUTSIDE this repo and must
+# never be committed (see docs/security-and-privacy.md).
+#
+# Paths may be POSIX (/srv/memory/...) or Windows (C:\memory\...); the engine
+# normalizes between them. sha256 — not the path — is the source-link authority.
+
+# --- corpus paths (REQUIRED for mutating operations) -----------------------
+org_root: /path/to/memory/_organized          # root the layer-0 dedup scans
+live_roots:                                    # ingest surfaces, priority order
+  - /path/to/memory/_organized/inbox
+  - /path/to/memory/_organized/reference
+hot_root: /path/to/memory/_organized/_hot      # curated, high-signal surface
+inbox_dir: /path/to/memory/_organized/_hot/_inbox
+queue_dir: /path/to/memory/_organized/_hot/_inbox/_queue
+held_root: /path/to/memory/_organized/_held    # cold / preserved originals
+superseded_root: /path/to/memory/_organized/_held/superseded-originals
+near_dup_cold: /path/to/memory/_organized/_held/near-dup
+manifests_dir: /path/to/memory/_organized/_provenance
+index_db: /path/to/memory/_organized/_provenance/INDEX.sqlite
+# manifest_path:  (optional) fixed manifest file; omit to derive a timestamped
+#                 one per run under manifests_dir.
+
+# How absolute paths are stored in manifests: native | posix | windows
+path_style: native
+
+# --- recall backend (qmd) --------------------------------------------------
+qmd:
+  bin: qmd                 # binary on PATH, or an absolute path
+  cwd: .                   # working dir for recall/index commands
+  wsl_wrap: false          # true: wrap calls in `wsl bash -lc` (Win -> WSL)
+  login_shell: false       # true: run via `bash -lc` (~ expansion / login PATH)
+  hot_collection: hot      # embedded vector collection
+  cold_index: cold         # BM25/FTS index name
+  rerank_floor: 0.30       # flags "weak" hot hits; does NOT gate cold
+  cold_cap: 5              # max cold hits surfaced per recall
+
+# --- classification / routing ----------------------------------------------
+# Tier rules: ordered (path-substring, tier) pairs; first match wins. If omitted,
+# tiers are derived from hot_root/held_root automatically.
+tier_rules:
+  - ["/_hot/", "hot"]
+  - ["/_held/", "cold"]
+
+# frontmatter `type` -> hot domain subfolder (generic vocabulary).
+domain_map:
+  decision-record: decisions
+  governance: governance
+  protocol: orchestration
+  reference-note: reference
+  doctrine: reference
+default_domain: reference
+
+# --- gating policy ---------------------------------------------------------
+aggressive_archetypes: ["EXPLORATORY_CHAT"]   # gate on faithfulness, not coverage
+faithfulness_floor: 0.90
+coverage_floors:
+  REFERENCE_NOTE: 0.95
+  GOVERNANCE_PROMPT: 0.95
+  DECISION_LOG: 0.40
+  FINISHED_REPORT: 0.80
+chunk_max_est_tokens: 850
+chunk_max_chars: 3600
+
+# --- naming / normalization ------------------------------------------------
+id_prefix: "KB-"            # artifact id namespace (choose your own)
+default_status: seeded
+export_prefixes: ["claude-", "chatgpt-"]   # stripped when deriving slugs/titles
+near_dup_threshold: 0.90
+
+# --- audit -----------------------------------------------------------------
+oversize_bytes: 51200       # advisory artifact-size ceiling for `audit hot`
