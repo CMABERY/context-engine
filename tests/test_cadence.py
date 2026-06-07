@@ -62,6 +62,54 @@ def test_cadence_apply_is_idempotent_on_second_run(synth_corpus):
     assert second["promoted"] == 0
 
 
+def test_same_basename_sources_are_not_dropped(synth_corpus):
+    # Two distinct sources sharing a basename must BOTH survive (no silent
+    # overwrite in the inbox).
+    cfg, _ = synth_corpus
+    live = cfg.live_roots[0]
+    os.makedirs(os.path.join(live, "a"))
+    os.makedirs(os.path.join(live, "b"))
+    with open(os.path.join(live, "a", "note.md"), "w", encoding="utf-8") as fh:
+        fh.write("# Note A\n\n## S\nalpha body\n")
+    with open(os.path.join(live, "b", "note.md"), "w", encoding="utf-8") as fh:
+        fh.write("# Note B\n\n## S\nbeta body\n")
+
+    summary = cadence.run(cfg, apply=True, runner=_fake_reindex_runner)
+    assert summary["new"] == 2
+    assert summary["seeded"] == 2
+    assert summary["promoted"] == 2          # neither silently dropped
+    assert summary["failures"] == []
+    ref = os.path.join(cfg.hot_root, "reference")
+    md = [f for f in os.listdir(ref) if f.endswith(".md")]
+    assert len(md) == 2                       # two distinct hot artifacts
+
+
+def test_dry_run_does_not_create_configured_index(synth_corpus):
+    cfg, _ = synth_corpus
+    _seed_corpus(cfg)
+    cadence.run(cfg, apply=False, runner=_fake_reindex_runner)
+    assert not os.path.exists(cfg.index_db)   # configured index untouched
+
+
+def test_dry_run_preserves_preexisting_file_at_index_path(synth_corpus):
+    cfg, _ = synth_corpus
+    _seed_corpus(cfg)
+    os.makedirs(os.path.dirname(cfg.index_db), exist_ok=True)
+    with open(cfg.index_db, "w", encoding="utf-8") as fh:
+        fh.write("not a database")
+    cadence.run(cfg, apply=False, runner=_fake_reindex_runner)
+    with open(cfg.index_db, encoding="utf-8") as fh:
+        assert fh.read() == "not a database"   # dry-run never touched it
+
+
+def test_detect_readonly_leaves_index_db_absent(synth_corpus):
+    cfg, _ = synth_corpus
+    _seed_corpus(cfg)
+    new = cadence.detect_readonly(cfg)
+    assert len(new) == 2
+    assert not os.path.exists(cfg.index_db)
+
+
 def test_baseline_marks_everything_seen(synth_corpus):
     cfg, _ = synth_corpus
     _seed_corpus(cfg)

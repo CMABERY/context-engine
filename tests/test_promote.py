@@ -64,6 +64,21 @@ def test_promote_requires_sources_linkback(tmp_path):
         promote.promote(art, str(hot), str(tmp_path / "m.jsonl"))
 
 
+def test_promote_refuses_destination_collision(tmp_path):
+    hot = tmp_path / "_hot"
+    dst_dir = hot / "reference"
+    dst_dir.mkdir(parents=True)
+    # A different hot artifact already occupies the destination name.
+    (dst_dir / "artifact.md").write_text("EXISTING", encoding="utf-8")
+    art = _stage(tmp_path, gate={"archetype": "REFERENCE_NOTE",
+                                 "coverage": 1.0, "missing": []})
+    with pytest.raises(PromotionError):
+        promote.promote(art, str(hot), str(tmp_path / "m.jsonl"))
+    # existing hot artifact is NOT overwritten, and the inbox artifact stays put
+    assert (dst_dir / "artifact.md").read_text(encoding="utf-8") == "EXISTING"
+    assert os.path.exists(art)
+
+
 def test_promote_rejects_chunk_lint_failure(tmp_path):
     hot = tmp_path / "_hot"
     hot.mkdir()

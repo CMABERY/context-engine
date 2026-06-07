@@ -118,13 +118,14 @@ def _dedup_cold(hot_results: list[dict], cold_results: list[dict]) -> list[dict]
 # Command construction
 # ---------------------------------------------------------------------------
 
-def _quote(query: str) -> str:
-    return '"' + query.replace('"', '\\"') + '"'
-
-
 def hot_command(query: str, qmd: QmdConfig) -> list[str]:
-    """argv for a hot (vector/rerank) recall."""
-    return [qmd.hot_verb, qmd.json_flag, _quote(query)]
+    """argv for a hot (vector/rerank) recall.
+
+    The query is a RAW argv element — no surrounding quotes. Quoting is the
+    runner's job: ``subprocess`` handles argv directly, and the shell-wrapped
+    path shell-quotes via :func:`build_shell_command`.
+    """
+    return [qmd.hot_verb, qmd.json_flag, query]
 
 
 def cold_command(query: str, qmd: QmdConfig) -> list[str]:
@@ -133,7 +134,7 @@ def cold_command(query: str, qmd: QmdConfig) -> list[str]:
     Uses ``search`` (NOT ``query``) on the cold index — ``query --index cold``
     would trigger a large reranker-model download.
     """
-    return [qmd.cold_verb, qmd.json_flag, "--index", qmd.cold_index, _quote(query)]
+    return [qmd.cold_verb, qmd.json_flag, "--index", qmd.cold_index, query]
 
 
 def reindex_commands(qmd: QmdConfig) -> tuple[list[list[str]], list[str]]:
@@ -151,16 +152,30 @@ def reindex_commands(qmd: QmdConfig) -> tuple[list[list[str]], list[str]]:
 # Default runner (shell out to qmd)
 # ---------------------------------------------------------------------------
 
+def build_shell_command(qmd: QmdConfig, args: list[str]) -> str:
+    """Build a POSIX-shell command string for the ``bash -lc`` runner paths.
+
+    Every component — the binary, the cwd, and each arg (including the raw query)
+    — is shell-quoted, so spaces and shell metacharacters are safe. The shell
+    that runs this is bash (``wsl bash -lc`` / ``bash -lc``), so POSIX quoting
+    via :func:`shlex.quote` is correct.
+    """
+    quoted = " ".join(shlex.quote(a) for a in [qmd.bin, *args])
+    return f"cd {shlex.quote(qmd.cwd)} && {quoted}"
+
+
 def make_runner(qmd: QmdConfig) -> Runner:
     """Build the default subprocess runner from config.
 
     Honors ``wsl_wrap`` (Windows host -> WSL backend) and ``login_shell``
-    (``bash -lc`` for ``~`` expansion / login PATH). Returns combined
+    (``bash -lc`` for ``~`` expansion / login PATH). In direct mode the raw argv
+    is passed to ``subprocess`` (which quotes per-OS); in shell mode the command
+    is shell-quoted via :func:`build_shell_command`. Returns combined
     stdout+stderr so JSON-on-stdout and progress-on-stderr are both captured.
     """
     def runner(args: list[str]) -> str:
         if qmd.wsl_wrap or qmd.login_shell:
-            cmd = f"cd {shlex.quote(qmd.cwd)} && {qmd.bin} " + " ".join(args)
+            cmd = build_shell_command(qmd, args)
             argv = (["wsl", "bash", "-lc", cmd] if qmd.wsl_wrap
                     else ["bash", "-lc", cmd])
             proc = subprocess.run(argv, capture_output=True, text=True)

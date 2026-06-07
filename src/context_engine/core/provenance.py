@@ -16,8 +16,19 @@ import glob
 import json
 import os
 import sqlite3
+import tempfile
 
 from ..utils.paths import to_local, to_posix_mount
+
+_SQLITE_MAGIC = b"SQLite format 3\x00"
+
+
+def _is_sqlite(path: str) -> bool:
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(16) == _SQLITE_MAGIC
+    except OSError:
+        return False
 
 
 def tier_for(path: str, tier_rules: list[tuple[str, str]] | None) -> str:
@@ -43,11 +54,25 @@ def build(manifests_dir: str, out_db: str,
 
     Always produces a valid (possibly empty) ``files`` table so downstream
     ``resolve()`` never hits a 'no such table' error on a first run.
+
+    The index is built into a temporary file and then atomically moved into
+    place, so an interrupted build never leaves a half-written index and a
+    pre-existing index is replaced in one step. As a safety net against
+    misconfiguration, this refuses to overwrite a non-empty path that is **not**
+    a SQLite database (so pointing ``index_db`` at a real file can't destroy it).
     """
-    if os.path.exists(out_db):
-        os.remove(out_db)
-    os.makedirs(os.path.dirname(os.path.abspath(out_db)), exist_ok=True)
-    conn = sqlite3.connect(out_db)
+    out_db_abs = os.path.abspath(out_db)
+    if (os.path.exists(out_db_abs) and os.path.getsize(out_db_abs) > 0
+            and not _is_sqlite(out_db_abs)):
+        raise ValueError(
+            f"refusing to overwrite a non-sqlite file at the index path: "
+            f"{out_db}. Point index_db at a dedicated database location.")
+    out_dir = os.path.dirname(out_db_abs)
+    os.makedirs(out_dir, exist_ok=True)
+
+    fd, tmp_db = tempfile.mkstemp(suffix=".sqlite", dir=out_dir)
+    os.close(fd)
+    conn = sqlite3.connect(tmp_db)
     conn.execute(
         "CREATE TABLE files (sha256 TEXT, path TEXT, current INTEGER, tier TEXT)"
     )
@@ -76,6 +101,8 @@ def build(manifests_dir: str, out_db: str,
     conn.executemany("INSERT INTO files VALUES (?,?,?,?)", rows)
     conn.commit()
     conn.close()
+    # Atomically move the freshly-built index into place (replaces any existing).
+    os.replace(tmp_db, out_db_abs)
 
 
 def resolve(db: str, sha256: str) -> dict:

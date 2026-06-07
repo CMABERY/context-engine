@@ -101,8 +101,8 @@ packs (orchestration / execution / verification).
 | Command | What it does | Mutates? |
 |---|---|---|
 | `doctor` | report environment + backend availability | no |
-| `observe` | new files + classification preview | no (builds index) |
-| `delta` | unseen `*.md` by sha256 | no (builds index) |
+| `observe` | new files + classification preview | no |
+| `delta` | unseen `*.md` by sha256 | no |
 | `baseline [--apply]` | record current corpus as seen | with `--apply` |
 | `cadence [--dry-run\|--apply]` | run the curation pipeline | with `--apply` |
 | `pack --project --role --task` | compile a context pack | no |

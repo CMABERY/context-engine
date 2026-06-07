@@ -82,6 +82,20 @@ def test_baseline_apply_without_config_refuses(tmp_path, monkeypatch):
     assert rc == 2
 
 
+def test_cadence_apply_refuses_non_sqlite_index(tmp_path, synth_corpus, capsys):
+    cfg, _ = synth_corpus
+    # index_db misconfigured to point at a real (non-db) file -> clean refusal.
+    with open(cfg.index_db, "w", encoding="utf-8") as fh:
+        fh.write("not a database")
+    cfg_path = _write_config(cfg, tmp_path)
+    rc = main(["cadence", "--apply", "--config", cfg_path])
+    assert rc == 2  # clean exit, not an uncaught traceback
+    assert "non-sqlite" in capsys.readouterr().err
+    # the file was preserved
+    with open(cfg.index_db, encoding="utf-8") as fh:
+        assert fh.read() == "not a database"
+
+
 def test_audit_hot_with_config(tmp_path, synth_corpus):
     cfg, _ = synth_corpus
     # one clean artifact -> PASS

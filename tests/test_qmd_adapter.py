@@ -20,7 +20,8 @@ def test_hot_command_shape():
     assert cmd[0] == "query"
     assert "--json" in cmd
     assert "--index" not in cmd
-    assert cmd[-1] == '"my query"'
+    # RAW query as a single argv element (no literal surrounding quotes).
+    assert cmd[-1] == "my query"
 
 
 def test_cold_command_uses_search_and_index():
@@ -36,9 +37,22 @@ def test_cold_command_respects_custom_index():
     assert "archive" in cmd
 
 
-def test_query_quoting_escapes_quotes():
-    cmd = qmd.hot_command('say "hi"', CFG)
-    assert cmd[-1] == '"say \\"hi\\""'
+def test_raw_query_not_pre_quoted():
+    # The query must reach argv verbatim; quoting is the runner's responsibility,
+    # so direct subprocess mode does not receive literal quote characters.
+    assert qmd.hot_command('say "hi"', CFG)[-1] == 'say "hi"'
+    assert qmd.cold_command('a b', CFG)[-1] == "a b"
+
+
+def test_build_shell_command_quotes_components():
+    import shlex
+    cfg = QmdConfig(bin="qmd", cwd="/my dir")
+    cmd = qmd.build_shell_command(cfg, qmd.hot_command('say "hi" now', cfg))
+    parts = shlex.split(cmd)  # bash would parse it the same way
+    assert parts[0] == "cd"
+    assert "/my dir" in parts          # cwd round-trips intact despite the space
+    assert parts[-1] == 'say "hi" now'  # query round-trips intact, quotes preserved
+    assert "query" in parts and "--json" in parts
 
 
 def test_reindex_commands():

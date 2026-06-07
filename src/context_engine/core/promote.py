@@ -142,6 +142,13 @@ def promote(inbox_path: str, hot_root: str, manifest_path: str, *,
     dst_dir = os.path.join(hot_root, domain)
     os.makedirs(dst_dir, exist_ok=True)
     dst_abs = os.path.join(dst_dir, os.path.basename(inbox_path))
+    # Destination collision policy: never overwrite an existing hot artifact.
+    # Raising (vs. shutil.move's platform-dependent overwrite/OSError) keeps the
+    # failure deterministic and non-fatal — gate_and_promote catches it.
+    if os.path.exists(dst_abs):
+        raise PromotionError(
+            f"destination already exists (hot name collision): {dst_abs}. "
+            f"Resolve or rename the existing artifact before promoting.")
 
     sha = hashing.sha256_file(inbox_path)
     size = os.path.getsize(inbox_path)

@@ -1,3 +1,5 @@
+import pytest
+
 from context_engine.core import provenance
 from context_engine.utils import hashing, manifests
 
@@ -83,6 +85,33 @@ def test_resolve_prefers_current_record(tmp_path):
     assert rec["current"] is True
     assert rec["path"].endswith("z_current.md")
     assert rec["paths"][0].endswith("z_current.md")
+
+
+def test_build_refuses_to_clobber_non_sqlite_file(tmp_path):
+    # If index_db is misconfigured to point at a real file, build must refuse
+    # rather than destroy it.
+    manifests_dir = tmp_path / "_prov"
+    manifests_dir.mkdir()
+    db = tmp_path / "precious.txt"
+    db.write_text("do not delete me", encoding="utf-8")
+    with pytest.raises(ValueError):
+        provenance.build(str(manifests_dir), str(db))
+    assert db.read_text(encoding="utf-8") == "do not delete me"
+
+
+def test_build_replaces_existing_index_atomically(tmp_path):
+    src = tmp_path / "live" / "a.md"
+    src.parent.mkdir()
+    src.write_text("x", encoding="utf-8")
+    sha = hashing.sha256_file(str(src))
+    manifests_dir = tmp_path / "_prov"
+    mp = str(manifests_dir / "m.jsonl")
+    manifests.append(mp, op="seed", src_abs=str(src), dst_abs=str(src),
+                     sha256=sha, size_bytes=1, reason="r", stage="s")
+    db = str(tmp_path / "INDEX.sqlite")
+    provenance.build(str(manifests_dir), db)   # first build
+    provenance.build(str(manifests_dir), db)   # rebuild over an existing index
+    assert provenance.resolve(db, sha)["current"] is True
 
 
 def test_dangling_report_recoverable_by_name(tmp_path):

@@ -111,7 +111,7 @@ def cmd_observe(args) -> int:
 
     cfg = load_or_find(args.config)
     _need(cfg, "live_roots", "hot_root", "index_db", "manifests_dir")
-    new = cadence.detect(cfg)
+    new = cadence.detect_readonly(cfg)
     rows = cadence.classify_new(cfg, new)
     seeded = sum(1 for r in rows if not r["aggressive"])
     queued = sum(1 for r in rows if r["aggressive"])
@@ -138,7 +138,7 @@ def cmd_delta(args) -> int:
 
     cfg = load_or_find(args.config)
     _need(cfg, "live_roots", "hot_root", "index_db", "manifests_dir")
-    new = cadence.detect(cfg)
+    new = cadence.detect_readonly(cfg)
     if args.json:
         _emit({"new": len(new), "items": new}, True)
     else:
@@ -319,6 +319,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         return args.func(args)
     except ConfigError as exc:
         print(f"config error: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        # e.g. a misconfigured index_db pointing at a non-sqlite file, or a bad
+        # path_style — a user/config error, not a crash. Present it cleanly.
+        print(f"error: {exc}", file=sys.stderr)
         return 2
 
 

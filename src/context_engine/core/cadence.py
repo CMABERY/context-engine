@@ -18,6 +18,7 @@ import glob
 import json
 import os
 import shutil
+import tempfile
 
 from ..config import resolve_manifest_path
 from ..models import EngineConfig
@@ -67,11 +68,44 @@ def _seen(cfg: EngineConfig, manifest_path: str, src_path: str, sha: str,
 # Stages
 # ---------------------------------------------------------------------------
 
-def detect(cfg: EngineConfig) -> list[dict]:
-    """Stage 1: (re)build the INDEX from manifests, return unseen ``*.md``."""
+def detect(cfg: EngineConfig, db: str | None = None) -> list[dict]:
+    """Stage 1: (re)build the INDEX from manifests, return unseen ``*.md``.
+
+    ``db`` defaults to ``cfg.index_db``. Pass an alternate path (e.g. a throwaway
+    one) to detect without touching the configured index — see ``detect_readonly``.
+    """
+    db = db or cfg.index_db
     os.makedirs(cfg.manifests_dir, exist_ok=True)
-    provenance.build(cfg.manifests_dir, cfg.index_db, cfg.effective_tier_rules())
-    return delta.new_files(cfg.live_roots, cfg.index_db, cfg.hot_root)
+    provenance.build(cfg.manifests_dir, db, cfg.effective_tier_rules())
+    return delta.new_files(cfg.live_roots, db, cfg.hot_root)
+
+
+def detect_readonly(cfg: EngineConfig) -> list[dict]:
+    """``detect()`` that never touches the configured ``index_db``.
+
+    Builds the provenance index into a throwaway temporary database, so
+    read-only/dry-run commands (``observe``, ``delta``, ``cadence --dry-run``)
+    report the new-set without mutating any configured corpus path.
+    """
+    tmpdir = tempfile.mkdtemp(prefix="ce-index-")
+    try:
+        return detect(cfg, os.path.join(tmpdir, "index.sqlite"))
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def _unique_inbox_name(inbox: str, name: str, sha: str) -> str:
+    """Return an inbox filename that does not collide with an existing artifact.
+
+    Two distinct sources can share a basename; without this, the second seeded
+    artifact would silently overwrite the first in the inbox (and both would be
+    logged cadence-seen, dropping one forever). On collision, disambiguate with a
+    sha prefix — deterministic, mirroring the distill-queue's collision policy.
+    """
+    if not os.path.exists(os.path.join(inbox, name)):
+        return name
+    stem, ext = os.path.splitext(name)
+    return f"{stem}-{sha[:8].lower()}{ext}"
 
 
 def classify_new(cfg: EngineConfig, new: list[dict]) -> list[dict]:
@@ -90,6 +124,7 @@ def route(cfg: EngineConfig, manifest_path: str, rows: list[dict],
     inbox = _inbox_dir(cfg)
     queue = _queue_dir(cfg)
     seeded = queued = 0
+    hints: dict[str, str] = {}  # inbox filename -> archetype (for gate routing)
     for row in rows:
         if row["aggressive"]:
             if apply:
@@ -105,8 +140,8 @@ def route(cfg: EngineConfig, manifest_path: str, rows: list[dict],
         if apply:
             with open(row["path"], "r", encoding="utf-8", errors="replace") as fh:
                 raw = fh.read()
-            name = os.path.basename(row["path"])
-            title = os.path.splitext(name)[0]
+            base = os.path.basename(row["path"])
+            title = os.path.splitext(base)[0]
             atype = cfg.archetype_type_map.get(row["archetype"], "reference-note")
             artifact = seed.build_artifact(
                 body=raw + _LEDGER, sha256=row["sha256"], title=title,
@@ -114,12 +149,15 @@ def route(cfg: EngineConfig, manifest_path: str, rows: list[dict],
                 artifact_id=cfg.id_prefix + title.lower().replace(" ", "-")[:60],
                 default_status=cfg.default_status)
             os.makedirs(inbox, exist_ok=True)
+            # Disambiguate so a same-basename source can't overwrite a prior seed.
+            name = _unique_inbox_name(inbox, base, row["sha256"])
             with open(os.path.join(inbox, name), "w", encoding="utf-8") as fh:
                 fh.write(artifact)
+            hints[name] = row["archetype"]
             _seen(cfg, manifest_path, row["path"], row["sha256"], row["size"],
                   "seeded-near-lossless")
         seeded += 1
-    return {"seeded": seeded, "queued": queued}
+    return {"seeded": seeded, "queued": queued, "hints": hints}
 
 
 def _archetype_for_inbox(cfg: EngineConfig, name: str, hint: dict) -> str:
@@ -257,12 +295,11 @@ def run(cfg: EngineConfig, apply: bool = False, runner=None,
     """
     mp = manifest_path or resolve_manifest_path(cfg, "cadence")
     l0 = layer0_step(cfg, mp, apply)
-    new = detect(cfg)
+    # Dry-run must not mutate the configured index_db -> detect via a throwaway db.
+    new = detect(cfg) if apply else detect_readonly(cfg)
     rows = classify_new(cfg, new)
     routed = route(cfg, mp, rows, apply)
-    hint = {os.path.basename(r["path"]): r["archetype"]
-            for r in rows if not r["aggressive"]}
-    gp = gate_and_promote(cfg, mp, hint, apply)
+    gp = gate_and_promote(cfg, mp, routed["hints"], apply)
     moves = dedup_hot(cfg, mp, gp["promoted_paths"], apply) if apply else []
     norm = normalize_step(cfg, mp, apply) if apply else []
     idx = reindex_step(cfg, apply, runner=runner)
@@ -288,7 +325,8 @@ def baseline(cfg: EngineConfig, apply: bool, manifest_path: str | None = None) -
     act on content that arrives AFTER the baseline.
     """
     mp = manifest_path or resolve_manifest_path(cfg, "baseline")
-    new = detect(cfg)
+    # Dry-run baseline reports the new-set without touching the configured index.
+    new = detect(cfg) if apply else detect_readonly(cfg)
     if apply:
         for f in new:
             _seen(cfg, mp, f["path"], f["sha256"], f["size"], "baseline")

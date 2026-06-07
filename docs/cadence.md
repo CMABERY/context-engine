@@ -48,7 +48,7 @@ Stripping Ledger. The sha256-linked cold original is the real no-loss guarantee.
 
 ```
 classify
-   ├── near-lossless ──► seed_hot ──► .gate.json (coverage) ──► promote
+   ├── near-lossless ──► seed ──► .gate.json (coverage) ──► promote
    └── aggressive ─────► distill_queue ──► (faithful artifact) ──► .gate.json (faithfulness) ──► promote
 ```
 
@@ -79,5 +79,7 @@ context-engine baseline --config ./context-engine.yml --apply
   link-backs ∪ cadence-seen ledger) suppresses re-processing.
 * Every mutation is logged with `reversible: true` and the reason; the move/delete
   history in the manifests is the audit trail.
-* Dry-run performs **no** mutation — it reports the plan and the planned reindex
-  commands.
+* Dry-run (and the read-only `observe`/`delta`) performs **no** mutation of any
+  configured path — the provenance index is built into a throwaway database, so
+  the configured `index_db` is never touched, and the plan plus the planned
+  reindex commands are reported without changing the corpus.
