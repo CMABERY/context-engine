@@ -1,5 +1,4 @@
 import json
-import os
 
 from context_engine.core import layer0
 

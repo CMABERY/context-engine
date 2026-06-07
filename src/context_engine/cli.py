@@ -28,7 +28,6 @@ from . import __version__
 from .config import ConfigError, load_or_find, require_configured
 from .models import EngineConfig, PackRequest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -310,7 +309,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     # Packs and reports use UTF-8 (em dashes, bullets); keep stdout consistent
     # across platforms/consoles when output is piped or redirected.
     try:
-        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     except Exception:
         pass
     ap = build_parser()

@@ -32,9 +32,11 @@ from . import (
     layer0,
     neardup,
     normalize,
-    promote as _promote,
     provenance,
     seed,
+)
+from . import (
+    promote as _promote,
 )
 
 _LEDGER = "\n\n## Stripping Ledger\nDropped: none — near-verbatim seed.\n"
@@ -261,10 +263,11 @@ def normalize_step(cfg: EngineConfig, manifest_path: str, apply: bool) -> list[d
 
 def layer0_step(cfg: EngineConfig, manifest_path: str, apply: bool) -> dict:
     """Stage 0: lossless dedup of the corpus (runs FIRST so detect sees it)."""
+    superseded = (cfg.superseded_root
+                  or os.path.join(cfg.held_root or "", "superseded-originals"))
     return layer0.run(
         org_root=cfg.org_root, live_roots=cfg.live_roots, held_root=cfg.held_root,
-        superseded_root=cfg.superseded_root or os.path.join(cfg.held_root or "", "superseded-originals"),
-        manifest_path=manifest_path, apply=apply,
+        superseded_root=superseded, manifest_path=manifest_path, apply=apply,
         exclude_globs=cfg.exclude_globs, path_style=cfg.path_style)
 
 

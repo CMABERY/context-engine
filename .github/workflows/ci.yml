@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install (editable + dev tools)
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check src tests
+
+      - name: Tests (pytest)
+        run: pytest -q
+
+      # Standing privacy gate: fail the build if any tracked source/test/example
+      # contains a secret, a real host/home path, or a corpus-specific token.
+      # grep exits 0 on MATCH (so a hit FAILS the build) and 1 when clean; an
+      # error (>=2) also fails. The corpus-specific tokens are supplied out-of-band
+      # via the PRIVACY_TOKENS repo variable so real identifiers never live here.
+      - name: Privacy gate
+        env:
+          EXTRA: ${{ vars.PRIVACY_TOKENS }}
+        run: |
+          PATTERN='BEGIN [A-Z ]*PRIVATE KEY|AKIA[0-9A-Z]{16}|/home/[a-z]|/Users/[A-Za-z]|C:\\Users'
+          if [ -n "${EXTRA:-}" ]; then PATTERN="$PATTERN|$EXTRA"; fi
+          out=$(grep -rnIE "$PATTERN" src tests examples README.md pyproject.toml) && rc=0 || rc=$?
+          if [ "$rc" -eq 0 ]; then
+            echo "::error::privacy gate matched a forbidden pattern:"; echo "$out"; exit 1
+          fi
+          if [ "$rc" -ge 2 ]; then
+            echo "::error::privacy grep failed (exit $rc)"; exit 1
+          fi
+          echo "privacy gate clean"
+
+      # Advisory only — the code is type-hinted but not exhaustively typed; this
+      # surfaces type drift without blocking on pre-existing untyped-ness.
+      - name: Type check (mypy, advisory)
+        continue-on-error: true
+        run: mypy src

@@ -68,6 +68,19 @@ Expected result: **no matches**. Keep the real identifiers in your shell history
 local notes only — do not hard-code them into this doc, or you reintroduce the
 very leak the sweep is meant to catch.
 
+### Standing CI gate
+
+`.github/workflows/ci.yml` runs this sweep on every push/PR as a **blocking
+privacy gate**. It checks a generic baseline (private keys, AWS keys, real
+`/home`, `/Users`, and `C:\Users` paths) over `src`, `tests`, `examples`,
+`README.md`, and `pyproject.toml`. Because `grep` exits 0 on a match, the gate is
+wired so a hit **fails** the build.
+
+To extend the gate with identifiers specific to *your* corpus **without putting
+them in the repo**, set a repository variable `PRIVACY_TOKENS` (a `grep -E`
+alternation, e.g. `mycorp|acme-client|/srv/data`); CI folds it into the pattern at
+run time. The real tokens live in the CI settings, never in tracked files.
+
 ## If you find corpus content in the repo
 
 1. Do **not** commit. If already committed, treat it as a leak: purge it from

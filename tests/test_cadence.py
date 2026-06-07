@@ -110,6 +110,23 @@ def test_detect_readonly_leaves_index_db_absent(synth_corpus):
     assert not os.path.exists(cfg.index_db)
 
 
+def test_exact_duplicate_canonical_is_promoted(synth_corpus):
+    # layer0 deletes a byte-identical copy; the surviving canonical must still be
+    # curated into hot (the delete must not mark its content as seen).
+    cfg, _ = synth_corpus
+    live = cfg.live_roots[0]
+    body = "# Canon\n\n## S\nshared body\n"
+    with open(os.path.join(live, "canon.md"), "w", encoding="utf-8") as fh:
+        fh.write(body)
+    with open(os.path.join(live, "canon (1).md"), "w", encoding="utf-8") as fh:
+        fh.write(body)  # byte-identical copy -> layer0 removes it
+
+    summary = cadence.run(cfg, apply=True, runner=_fake_reindex_runner)
+    assert summary["layer0"]["live_delete"] == 1      # the (1) copy removed
+    assert summary["promoted"] == 1                    # canonical still promoted
+    assert os.path.exists(os.path.join(cfg.hot_root, "reference", "canon.md"))
+
+
 def test_baseline_marks_everything_seen(synth_corpus):
     cfg, _ = synth_corpus
     _seed_corpus(cfg)

@@ -74,7 +74,8 @@ def build(manifests_dir: str, out_db: str,
     os.close(fd)
     conn = sqlite3.connect(tmp_db)
     conn.execute(
-        "CREATE TABLE files (sha256 TEXT, path TEXT, current INTEGER, tier TEXT)"
+        "CREATE TABLE files (sha256 TEXT, path TEXT, current INTEGER, "
+        "tier TEXT, op TEXT)"
     )
     conn.execute("CREATE INDEX idx_sha ON files(sha256)")
     rows = []
@@ -92,13 +93,14 @@ def build(manifests_dir: str, out_db: str,
                 sha = (rec.get("sha256") or "").upper()
                 if not sha or sha.startswith("WITHHELD"):
                     continue
+                op = rec.get("op")
                 for key in ("dst_abs", "src_abs"):
                     p = rec.get(key)
                     if not p:
                         continue
                     rows.append((sha, p, 1 if os.path.exists(to_local(p)) else 0,
-                                 tier_for(p, tier_rules)))
-    conn.executemany("INSERT INTO files VALUES (?,?,?,?)", rows)
+                                 tier_for(p, tier_rules), op))
+    conn.executemany("INSERT INTO files VALUES (?,?,?,?,?)", rows)
     conn.commit()
     conn.close()
     # Atomically move the freshly-built index into place (replaces any existing).

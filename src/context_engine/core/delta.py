@@ -24,7 +24,17 @@ def index_shas(db: str) -> set[str]:
         return set()
     conn = sqlite3.connect(db)
     try:
-        rows = conn.execute("SELECT sha256 FROM files").fetchall()
+        # Exclude pure-removal ops from the seen-set: a `delete` only removed a
+        # redundant COPY, so its sha (identical to the surviving canonical's)
+        # must not suppress curation of that canonical. Only curation/preservation
+        # ops mark content as seen. (Older indexes without an `op` column fall
+        # back to all rows.)
+        try:
+            rows = conn.execute(
+                "SELECT sha256 FROM files WHERE op IS NULL OR op != 'delete'"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = conn.execute("SELECT sha256 FROM files").fetchall()
     finally:
         conn.close()
     return {str(r[0]).upper() for r in rows if r[0]}

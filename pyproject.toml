@@ -42,6 +42,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -63,3 +65,24 @@ python_files = ["test_*.py"]
 addopts = "-ra"
 # Lets the suite import the package straight from src/ without an install.
 pythonpath = ["src"]
+
+# Conservative lint config — a foothold, not a reformat. Focused on real defects
+# (pyflakes F, import order I, pycodestyle E/W) rather than broad style churn.
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E741"]  # ambiguous var names (e.g. l0) are fine in this codebase
+
+# Lenient type checking — a starting gate, not strict mode. The code is hinted
+# but not exhaustively typed; this catches obvious mistakes without churn.
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# intentionally NOT strict: untyped defs and implicit Optional are tolerated for now
+check_untyped_defs = false

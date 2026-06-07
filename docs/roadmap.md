@@ -59,8 +59,10 @@ The engine as a shared memory substrate for fleets of agents.
 
 ## Cross-cutting, ongoing
 
-* **Privacy:** keep the codebase free of corpus-specific identifiers; the grep
-  sweep in [security-and-privacy](security-and-privacy.md) stays green.
+* **Privacy:** keep the codebase free of corpus-specific identifiers; the
+  [security-and-privacy](security-and-privacy.md) grep sweep stays green and is
+  enforced on every push by the CI privacy gate (`.github/workflows/ci.yml`).
 * **Determinism & reversibility:** pure functions where possible; every mutation
   logged and reversible.
 * **Test coverage:** synthetic fixtures only; never depend on a private corpus.
+* **CI:** ruff (lint) + pytest run on Python 3.10–3.12; mypy advisory.
