@@ -17,7 +17,21 @@ Two memory tiers underpin it:
 The public surface is intentionally small and stable; see the submodules for the
 implementation of each loop stage.
 """
+from .core.ingest import (
+    FeedEvidence,
+    IngestError,
+    IngestProvenance,
+    IngestReceipt,
+    ingest,
+)
 
 __version__ = "0.5.0"
 
-__all__ = ["__version__"]
+__all__ = [
+    "__version__",
+    "ingest",
+    "FeedEvidence",
+    "IngestProvenance",
+    "IngestReceipt",
+    "IngestError",
+]

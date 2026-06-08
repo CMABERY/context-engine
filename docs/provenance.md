@@ -35,10 +35,25 @@ record schema:
 }
 ```
 
-Operations include `promote`, `move`, `delete`, `normalize`, `copy` (seed), and
-`cadence-seen` (the ledger that marks a source evaluated). Because the log is
-append-only and every record is `reversible`, the corpus history is fully
-auditable and any step can be undone.
+Operations include `promote`, `move`, `delete`, `normalize`, `copy` (seed),
+`cadence-seen` (the ledger that marks a source evaluated), and `ingest` (the feed
+sink — see below). Because the log is append-only and every record is
+`reversible`, the corpus history is fully auditable and any step can be undone.
+
+### Ingested feed evidence (advisory)
+
+`ingest` (`context_engine.ingest`) is the write-back sink: it stores records *fed*
+to the engine by an upstream orchestrator as **advisory cold evidence** — a
+provenance-bearing *copy* of an authoritative record that lives in another system,
+never a truth source. Each ingest writes one immutable JSON document and appends
+one `op="ingest"` manifest row (`reversible: true`), so it is append-only and
+reversible exactly like any other mutation; re-ingesting an identical record is a
+no-op. The document is flagged `advisory: true` / `is_truth_source: false` and
+carries a `sources[].sha256` **link-back** to the upstream authoritative record —
+the manifest row's own `sha256` is the hash of the stored bytes, so the index
+never lies about what it points at, while the cross-system link travels in
+`sources[]`. The fed records cross the boundary as engine-native data, so the
+engine takes on **no dependency** on the upstream system.
 
 ### Path storage style
 
