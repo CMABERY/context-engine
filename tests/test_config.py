@@ -43,6 +43,43 @@ def test_load_config_reads_yaml(tmp_path):
     assert cfg.qmd.bin == "qmd2"
 
 
+def test_load_project_config_builds_request_with_role_defaults_and_overrides(tmp_path):
+    p = tmp_path / "project-config.yml"
+    p.write_text(
+        "\n".join([
+            "project: research-kb",
+            "objective: Build from governed research.",
+            "packs:",
+            "  defaults:",
+            "    max_hot: 8",
+            "    max_cold: 1",
+            "    max_admissibility: internal",
+            "  roles:",
+            "    synthesis:",
+            "      max_hot: 5",
+            "      max_cold: 0",
+            "      max_admissibility: private",
+            "exclusions:",
+            "  - Draft vendor claims are inadmissible.",
+            "assumptions:",
+            "  - Hot claims cite cold evidence.",
+        ]),
+        encoding="utf-8",
+    )
+
+    pcfg = config.load_project_config(str(p))
+    req = pcfg.to_pack_request(
+        role="synthesis", task="summarize", max_hot=3, objective="Override objective")
+
+    assert req.project == "research-kb"
+    assert req.objective == "Override objective"
+    assert req.max_hot == 3
+    assert req.max_cold == 0
+    assert req.max_admissibility == "private"
+    assert req.exclusions == ["Draft vendor claims are inadmissible."]
+    assert req.assumptions == ["Hot claims cite cold evidence."]
+
+
 def test_load_config_missing_raises(tmp_path):
     with pytest.raises(ConfigError):
         config.load_config(str(tmp_path / "nope.yml"))

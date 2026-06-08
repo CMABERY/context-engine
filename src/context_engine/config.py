@@ -12,7 +12,7 @@ from typing import Optional
 
 import yaml
 
-from .models import EngineConfig
+from .models import EngineConfig, ProjectConfig
 from .utils.manifests import now_utc
 
 # Default config filename searched for in the cwd and its ancestors.
@@ -40,6 +40,23 @@ def load_config(path: str) -> EngineConfig:
     if not isinstance(data, dict):
         raise ConfigError(f"config root must be a mapping, got {type(data).__name__}")
     return EngineConfig.from_dict(data)
+
+
+def load_project_config(path: str) -> ProjectConfig:
+    """Load a reusable project/profile pack config from ``path``."""
+    if not os.path.isfile(path):
+        raise ConfigError(f"project config file not found: {path}")
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    except yaml.YAMLError as exc:  # pragma: no cover - exercised via tests
+        raise ConfigError(f"project config is not valid YAML ({path}): {exc}") from exc
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise ConfigError(
+            f"project config root must be a mapping, got {type(data).__name__}")
+    return ProjectConfig.from_dict(data)
 
 
 def find_config(start: Optional[str] = None) -> Optional[str]:

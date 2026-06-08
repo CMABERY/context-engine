@@ -199,6 +199,8 @@ def gate_and_promote(cfg: EngineConfig, manifest_path: str, hint: dict,
                 coverage_floors=cfg.coverage_floors,
                 aggressive_archetypes=cfg.aggressive_archetypes,
                 faithfulness_floor=cfg.faithfulness_floor,
+                require_confidence_for_types=cfg.require_confidence_for_types,
+                valid_confidences=cfg.valid_confidences,
                 max_est_tokens=cfg.chunk_max_est_tokens,
                 max_chars=cfg.chunk_max_chars, path_style=cfg.path_style)
             promoted.append(res["dst_abs"])

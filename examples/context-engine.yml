@@ -61,6 +61,8 @@ default_domain: reference
 # --- gating policy ---------------------------------------------------------
 aggressive_archetypes: ["EXPLORATORY_CHAT"]   # gate on faithfulness, not coverage
 faithfulness_floor: 0.90
+require_confidence_for_types: []               # e.g. ["distilled-claim"]
+valid_confidences: ["low", "medium", "high"]
 coverage_floors:
   REFERENCE_NOTE: 0.95
   GOVERNANCE_PROMPT: 0.95

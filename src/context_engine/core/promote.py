@@ -71,6 +71,8 @@ def promote(inbox_path: str, hot_root: str, manifest_path: str, *,
             coverage_floors: dict[str, float] | None = None,
             aggressive_archetypes: list[str] | None = None,
             faithfulness_floor: float = DEFAULT_FAITHFULNESS_FLOOR,
+            require_confidence_for_types: list[str] | None = None,
+            valid_confidences: list[str] | None = None,
             fallback_floor: float = DEFAULT_FALLBACK_FLOOR,
             max_est_tokens: int = chunk_lint.DEFAULT_MAX_EST_TOKENS,
             max_chars: int = chunk_lint.DEFAULT_MAX_CHARS,
@@ -136,6 +138,17 @@ def promote(inbox_path: str, hot_root: str, manifest_path: str, *,
     if not (isinstance(sources, list) and sources and
             all(isinstance(s, dict) and s.get("sha256") for s in sources)):
         raise PromotionError("missing sources[] sha256 link-back in frontmatter")
+    required_types = {str(t).lower() for t in (require_confidence_for_types or [])}
+    artifact_type = str(fm.get("type", "")).lower()
+    if artifact_type in required_types:
+        confidence = str(fm.get("confidence") or "").strip().lower()
+        if not confidence:
+            raise PromotionError(f"missing confidence for {artifact_type}")
+        allowed_confidences = {str(v).lower() for v in (valid_confidences or [])}
+        if allowed_confidences and confidence not in allowed_confidences:
+            raise PromotionError(
+                f"confidence {confidence!r} is not one of "
+                f"{sorted(allowed_confidences)} for {artifact_type}")
 
     # All gates pass — move into the domain subfolder and log.
     domain = domain_map.get(str(fm.get("type", "")).lower(), default_domain)

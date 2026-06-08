@@ -56,6 +56,78 @@ def test_research_role_surfaces_cold_via_compile():
     assert "cold/a.md" in md and "cold/b.md" in md
 
 
+def test_synthesis_role_renders_authoring_guidance():
+    md = compile_pack(
+        PackRequest(project="P", role="synthesis", task="write design memo"),
+        recall_results={"hot": [], "cold": [], "weak_hot": False})
+
+    assert "/ synthesis" in md
+    assert "authoring a high-signal synthesis" in md
+    assert "cite each claim" in md
+
+
+def test_compile_pack_filters_hits_above_admissibility_and_records_exclusion():
+    req = PackRequest(project="P", role="research", task="t", max_admissibility="internal")
+    hot = [
+        {"path": "hot/public.md", "score": 0.9, "admissibility": "public"},
+        {"path": "hot/private.md", "score": 0.8, "admissibility": "private"},
+    ]
+    cold = [
+        {"path": "cold/internal.md", "score": 0.7, "admissibility": "internal"},
+        {"path": "cold/proprietary.md", "score": 0.6, "admissibility": "proprietary"},
+    ]
+
+    md = compile_pack(
+        req, recall_results={"hot": hot, "cold": cold, "weak_hot": False})
+
+    assert "hot/public.md" in md
+    assert "cold/internal.md" in md
+    assert "`hot/private.md` — score" not in md
+    assert "`cold/proprietary.md` — score" not in md
+    assert "Excluded `hot/private.md`" in md
+    assert "admissibility private exceeds max internal" in md
+
+
+def test_compile_pack_treats_unlabeled_hits_as_internal_not_public():
+    hits = [
+        {"path": "hot/public.md", "score": 0.9, "admissibility": "public"},
+        {"path": "hot/missing.md", "score": 0.8},
+        {"path": "hot/null.md", "score": 0.7, "admissibility": None},
+        {"path": "hot/empty.md", "score": 0.6, "admissibility": ""},
+    ]
+
+    public_md = compile_pack(
+        PackRequest(project="P", role="research", task="t",
+                    max_admissibility="public"),
+        recall_results={"hot": hits, "cold": [], "weak_hot": False})
+
+    assert "`hot/public.md` — score" in public_md
+    assert "`hot/missing.md` — score" not in public_md
+    assert "`hot/null.md` — score" not in public_md
+    assert "`hot/empty.md` — score" not in public_md
+    assert (
+        "Excluded `hot/missing.md` because admissibility internal exceeds max public"
+        in public_md
+    )
+    assert (
+        "Excluded `hot/null.md` because admissibility internal exceeds max public"
+        in public_md
+    )
+    assert (
+        "Excluded `hot/empty.md` because admissibility proprietary exceeds max public"
+        in public_md
+    )
+
+    internal_md = compile_pack(
+        PackRequest(project="P", role="research", task="t",
+                    max_admissibility="internal"),
+        recall_results={"hot": hits, "cold": [], "weak_hot": False})
+
+    assert "`hot/missing.md` — score" in internal_md
+    assert "`hot/null.md` — score" in internal_md
+    assert "`hot/empty.md` — score" not in internal_md
+
+
 def test_unknown_role_raises():
     with pytest.raises(ValueError):
         templates.get_role("nonsense")

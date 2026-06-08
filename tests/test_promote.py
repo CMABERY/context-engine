@@ -64,6 +64,57 @@ def test_promote_requires_sources_linkback(tmp_path):
         promote.promote(art, str(hot), str(tmp_path / "m.jsonl"))
 
 
+def test_promote_requires_confidence_for_configured_type(tmp_path):
+    hot = tmp_path / "_hot"
+    hot.mkdir()
+    body = ("---\nid: KB-claim\ntype: distilled-claim\nstatus: reviewed\n"
+            "sources:\n  - sha256: AABBCC\n---\n\n"
+            "# Claim\n\n## Section\nsource-linked claim\n")
+    art = _stage(tmp_path, body=body,
+                 gate={"archetype": "REFERENCE_NOTE", "coverage": 1.0, "missing": []})
+
+    with pytest.raises(PromotionError, match="missing confidence"):
+        promote.promote(
+            art, str(hot), str(tmp_path / "m.jsonl"),
+            require_confidence_for_types=["distilled-claim"])
+
+
+def test_promote_accepts_confidence_for_configured_type(tmp_path):
+    hot = tmp_path / "_hot"
+    hot.mkdir()
+    mp = str(tmp_path / "m.jsonl")
+    body = ("---\nid: KB-claim\ntype: distilled-claim\nstatus: reviewed\n"
+            "confidence: medium\n"
+            "sources:\n  - sha256: AABBCC\n---\n\n"
+            "# Claim\n\n## Section\nsource-linked claim\n")
+    art = _stage(tmp_path, body=body,
+                 gate={"archetype": "REFERENCE_NOTE", "coverage": 1.0, "missing": []})
+
+    res = promote.promote(
+        art, str(hot), mp, domain_map={"distilled-claim": "claims"},
+        require_confidence_for_types=["distilled-claim"])
+
+    assert res["ok"] is True
+    assert res["domain"] == "claims"
+
+
+def test_promote_rejects_invalid_confidence_for_configured_type(tmp_path):
+    hot = tmp_path / "_hot"
+    hot.mkdir()
+    body = ("---\nid: KB-claim\ntype: distilled-claim\nstatus: reviewed\n"
+            "confidence: certain\n"
+            "sources:\n  - sha256: AABBCC\n---\n\n"
+            "# Claim\n\n## Section\nsource-linked claim\n")
+    art = _stage(tmp_path, body=body,
+                 gate={"archetype": "REFERENCE_NOTE", "coverage": 1.0, "missing": []})
+
+    with pytest.raises(PromotionError, match="not one of"):
+        promote.promote(
+            art, str(hot), str(tmp_path / "m.jsonl"),
+            require_confidence_for_types=["distilled-claim"],
+            valid_confidences=["low", "medium", "high"])
+
+
 def test_promote_refuses_destination_collision(tmp_path):
     hot = tmp_path / "_hot"
     dst_dir = hot / "reference"

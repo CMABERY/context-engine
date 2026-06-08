@@ -1,8 +1,8 @@
 # Roadmap
 
-The engine is built in milestones, each adding one capability layer. The current
-release is **v0.5.0**; the milestones below describe the intended arc and what
-each delivers.
+The engine is built in capability milestones, each adding one layer. The package
+version is **v0.5.0**; the checklist below describes capability status, not a
+claim that every v0.5 milestone item is implemented.
 
 ## v0.1 — local QMD-backed context engine ✅
 
@@ -19,19 +19,22 @@ The foundation: a corpus-agnostic engine with the full curation cadence.
 
 Turn governed memory into role-scoped projections agents consume.
 
-* `render_pack` (pure) + `compile_pack`; five roles (orchestration, execution,
-  verification, research, handoff) with admissibility rules.
+* `render_pack` (pure) + `compile_pack`; six roles (orchestration, execution,
+  verification, research, synthesis, handoff) with admissibility rules.
 * `pack` CLI; offline rendering with explicit recall-unavailable risk.
 
-> v0.1 and v0.2 are implemented in this release.
+> v0.1 and v0.2 are implemented. v0.3 is partially implemented; completed items
+> are marked individually below.
 
 ## v0.3 — project adapters
 
 Make the engine multi-project and pluggable.
 
 * A `project-config` layer (see `examples/project-config.example.yml`) that pins
-  per-project pack defaults, preferred domains, and standing exclusions.
-* A loader + resolution order (engine config ← project config ← CLI flags).
+  per-project pack defaults and standing exclusions. ✅
+* A loader + resolution order for pack requests (engine config ← project config
+  ← CLI flags). ✅
+* Recall-time use of project `prefer_domains`.
 * Adapter interface beyond qmd (e.g. a local-embeddings or SQLite-FTS adapter)
   selected by config, all behind the existing runner seam.
 * Per-project provenance namespacing.

@@ -116,6 +116,32 @@ ROLE_SPECS: dict[str, RoleSpec] = {
             "Speculation presented as fact (label inferences clearly).",
         ),
     ),
+    "synthesis": RoleSpec(
+        name="synthesis",
+        framing=(
+            "You are authoring a high-signal synthesis from governed memory. Work "
+            "from curated hot claims first, cite each claim as you write, and do "
+            "not invent beyond the included artifacts."
+        ),
+        include_cold=False,
+        cold_reason=(
+            "excluded — synthesis works from promoted hot claims; request a "
+            "verification pack when exact cold proof is needed."
+        ),
+        verification_requirements=(
+            "Every synthesized assertion must trace to an included hot artifact.",
+            "Flag missing evidence or contradictions as gaps rather than prose.",
+            "Do not cite material excluded by admissibility.",
+        ),
+        next_action=(
+            "Author the synthesis for: {task}. Cite included hot artifacts inline "
+            "and end with unresolved / needs-evidence gaps."
+        ),
+        default_exclusions=(
+            "Cold originals unless a verification pack is requested.",
+            "Claims without an included hot artifact citation.",
+        ),
+    ),
     "handoff": RoleSpec(
         name="handoff",
         framing=(

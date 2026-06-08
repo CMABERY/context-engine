@@ -25,7 +25,7 @@ import sys
 from typing import Optional
 
 from . import __version__
-from .config import ConfigError, load_or_find, require_configured
+from .config import ConfigError, load_or_find, load_project_config, require_configured
 from .models import EngineConfig, PackRequest
 
 # ---------------------------------------------------------------------------
@@ -196,9 +196,23 @@ def cmd_pack(args) -> int:
               file=sys.stderr)
         return 2
 
-    request = PackRequest(
-        project=args.project, role=args.role, task=args.task,
-        objective=args.objective or "", max_hot=args.max_hot, max_cold=args.max_cold)
+    if args.project_config:
+        pcfg = load_project_config(args.project_config)
+        request = pcfg.to_pack_request(
+            project=args.project, role=args.role, task=args.task,
+            objective=args.objective or None, max_hot=args.max_hot,
+            max_cold=args.max_cold, max_admissibility=args.max_admissibility)
+    else:
+        request = PackRequest(
+            project=args.project or "", role=args.role, task=args.task,
+            objective=args.objective or "",
+            max_hot=args.max_hot if args.max_hot is not None else 8,
+            max_cold=args.max_cold if args.max_cold is not None else 3,
+            max_admissibility=args.max_admissibility or "internal")
+    if not request.project:
+        print("error: --project is required unless --project-config provides project",
+              file=sys.stderr)
+        return 2
 
     # If the recall backend is unavailable, compile from empty recall so packs
     # still render (against synthetic fixtures / offline) with a stated risk.
@@ -287,13 +301,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_pack = sub.add_parser("pack", parents=[parent],
                             help="compile a role-specific context pack")
-    p_pack.add_argument("--project", required=True)
+    p_pack.add_argument("--project")
+    p_pack.add_argument("--project-config",
+                        help="optional project/profile pack defaults YAML")
     p_pack.add_argument("--role", required=True,
-                        help="orchestration | execution | verification | research | handoff")
+                        help=("orchestration | execution | verification | "
+                              "research | synthesis | handoff"))
     p_pack.add_argument("--task", required=True)
     p_pack.add_argument("--objective", default="")
-    p_pack.add_argument("--max-hot", type=int, default=8, dest="max_hot")
-    p_pack.add_argument("--max-cold", type=int, default=3, dest="max_cold")
+    p_pack.add_argument("--max-hot", type=int, default=None, dest="max_hot")
+    p_pack.add_argument("--max-cold", type=int, default=None, dest="max_cold")
+    p_pack.add_argument("--max-admissibility",
+                        choices=["public", "internal", "private", "proprietary"],
+                        default=None)
     p_pack.add_argument("--out", help="write the pack to FILE (default: stdout)")
     p_pack.set_defaults(func=cmd_pack)
 

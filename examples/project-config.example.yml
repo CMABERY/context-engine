@@ -4,9 +4,10 @@
 # pins the defaults a single project wants when compiling context packs, so
 # agents working in that project get consistent, scoped memory projections.
 #
-# NOTE: this is the convention targeted by the v0.3 "project adapters" milestone
-# (see docs/roadmap.md). The v0.x CLI takes --project/--role/--task directly;
-# this file documents the intended shape so adapters can adopt it.
+# Pass this file to:
+#
+#     context-engine pack --project-config ./project-config.yml --role synthesis \
+#         --task "Write the implementation memo" --out pack.md
 
 project: billing-service        # logical project name (the --project value)
 
@@ -19,6 +20,7 @@ packs:
   defaults:
     max_hot: 8
     max_cold: 3
+    max_admissibility: internal
   roles:
     execution:
       max_hot: 6
@@ -26,6 +28,11 @@ packs:
     verification:
       max_hot: 4
       max_cold: 5            # verification is an admissible reason for cold
+      max_admissibility: private
+    synthesis:
+      max_hot: 6
+      max_cold: 0            # synthesis works from promoted hot claims
+      max_admissibility: internal
 
 # Recall scoping hints (advisory): bias retrieval toward these hot domains.
 prefer_domains:

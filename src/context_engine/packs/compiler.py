@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..models import EngineConfig, PackRequest
+from ..models import EngineConfig, PackRequest, admissibility_rank, normalize_admissibility
 from .templates import RoleSpec, get_role
 
 
@@ -35,6 +35,28 @@ def _fmt_hits(hits: list[dict]) -> list[str]:
 def _section(title: str, body_lines: list[str]) -> str:
     body = "\n".join(body_lines) if body_lines else "_(none)_"
     return f"## {title}\n\n{body}\n"
+
+
+def _filter_by_admissibility(
+    hits: list[dict], max_admissibility: str,
+) -> tuple[list[dict], list[str]]:
+    allowed = admissibility_rank(max_admissibility)
+    included: list[dict] = []
+    exclusions: list[str] = []
+    max_level = normalize_admissibility(max_admissibility)
+    for hit in hits:
+        raw_level = hit.get("admissibility")
+        if raw_level is None:
+            level = normalize_admissibility(None, default="internal")
+        else:
+            level = normalize_admissibility(str(raw_level), default="proprietary")
+        if admissibility_rank(level) <= allowed:
+            included.append(hit)
+            continue
+        path = hit.get("path", "?")
+        exclusions.append(
+            f"Excluded `{path}` because admissibility {level} exceeds max {max_level}.")
+    return included, exclusions
 
 
 def render_pack(*, project: str, role: str, task: str, objective: str,
@@ -106,12 +128,20 @@ def compile_pack(request: PackRequest, *, config: Optional[EngineConfig] = None,
         recall_results = qmd_adapter.recall(
             request.task, qmd=config.qmd, runner=recall_runner)
 
-    hot = list(recall_results.get("hot", []))[: request.max_hot]
-    cold = (list(recall_results.get("cold", []))[: request.max_cold]
-            if spec.include_cold else [])
+    hot_hits, hot_exclusions = _filter_by_admissibility(
+        list(recall_results.get("hot", [])), request.max_admissibility)
+    cold_hits, cold_exclusions = _filter_by_admissibility(
+        list(recall_results.get("cold", [])), request.max_admissibility)
+    hot = hot_hits[: request.max_hot]
+    cold = (cold_hits[: request.max_cold] if spec.include_cold else [])
     weak_hot = bool(recall_results.get("weak_hot", False))
 
-    exclusions = list(spec.default_exclusions) + list(request.exclusions)
+    exclusions = (
+        list(spec.default_exclusions)
+        + list(request.exclusions)
+        + hot_exclusions
+        + (cold_exclusions if spec.include_cold else [])
+    )
     objective = request.objective or (
         f"Equip the {request.role} agent to act on the task using governed memory.")
 

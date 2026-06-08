@@ -49,18 +49,20 @@ Roles encode the engine's governance principles as data (`packs/templates.py`):
 | **execution** | no | works from the curated hot slice | doing one task |
 | **verification** | **yes** | verification is a valid reason for cold | checking claims vs. evidence |
 | **research** | **yes** | hot may be incomplete | open-ended investigation |
+| **synthesis** | no | authors from promoted hot claims | source-oriented synthesis |
 | **handoff** | no | carries curated state | resuming work |
 
-The rule: **execution / orchestration / handoff get hot only; verification /
-research get hot + cold.** This directly implements "agents don't read raw corpus
-by default" and "cold access requires a reason."
+The rule: **execution / orchestration / synthesis / handoff get hot only;
+verification / research get hot + cold.** This directly implements "agents don't
+read raw corpus by default" and "cold access requires a reason."
 
 ## Compiling a pack
 
 `compile_pack` (in `packs/compiler.py`) is a thin orchestration:
 
 1. run recall for the task (hot always; cold for cold-admissible roles),
-2. apply the role's caps (`max_hot`, `max_cold`) and admissibility,
+2. apply the role's caps (`max_hot`, `max_cold`) and request/project
+   admissibility (`max_admissibility`),
 3. render markdown via the pure `render_pack`.
 
 ```python
@@ -71,6 +73,26 @@ req = PackRequest(project="billing-service", role="execution",
                   task="Implement the proration helper", max_hot=6)
 markdown = compile_pack(req, config=cfg)            # runs live recall
 ```
+
+Reusable project/profile pack defaults can be loaded with `--project-config`.
+CLI flags override project-config defaults:
+
+```bash
+context-engine pack --project-config ./project-config.yml --role synthesis \
+    --task "Write the implementation memo" --out pack.md
+```
+
+### Admissibility filtering
+
+`max_admissibility` uses this order, from least to most restricted: `public`,
+`internal`, `private`, `proprietary`. The default is `internal`.
+
+Recall hits with no admissibility label, or an explicit `null` label, are treated
+as `internal`: they are not public, but they remain available to the default
+internal pack policy. Explicit empty or unknown labels are treated as
+`proprietary` and are excluded unless the request allows proprietary material.
+Filtered hits are omitted from the included artifact sections and recorded in
+the pack's **Exclusions** section.
 
 ### Testing packs without a backend
 

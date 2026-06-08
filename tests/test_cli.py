@@ -37,6 +37,40 @@ def test_pack_writes_file(tmp_path, capsys):
     assert "## Next action" in content
 
 
+def test_pack_uses_project_config_defaults(tmp_path):
+    project_cfg = tmp_path / "project-config.yml"
+    project_cfg.write_text(
+        "\n".join([
+            "project: ResearchKB",
+            "objective: Synthesize governed research.",
+            "packs:",
+            "  defaults:",
+            "    max_hot: 4",
+            "    max_cold: 1",
+            "  roles:",
+            "    synthesis:",
+            "      max_hot: 2",
+            "exclusions:",
+            "  - Uncited claims.",
+            "assumptions:",
+            "  - Hot claims cite cold evidence.",
+        ]),
+        encoding="utf-8",
+    )
+    out_file = tmp_path / "pack.md"
+
+    rc = main([
+        "pack", "--project-config", str(project_cfg), "--role", "synthesis",
+        "--task", "write a memo", "--out", str(out_file)])
+
+    assert rc == 0
+    content = out_file.read_text(encoding="utf-8")
+    assert "# Context Pack — ResearchKB / synthesis" in content
+    assert "Synthesize governed research." in content
+    assert "Uncited claims." in content
+    assert "Hot claims cite cold evidence." in content
+
+
 def test_pack_unknown_role(capsys):
     rc = main(["pack", "--project", "P", "--role", "bogus", "--task", "t"])
     assert rc == 2

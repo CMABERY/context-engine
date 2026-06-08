@@ -101,6 +101,20 @@ DEFAULT_STATUS_MAP: dict[str, str] = {
     "seed": "seeded",
 }
 
+ADMISSIBILITY_LEVELS: tuple[str, ...] = (
+    "public", "internal", "private", "proprietary")
+
+
+def normalize_admissibility(value: str | None, *, default: str = "internal") -> str:
+    """Return a normalized admissibility level, defaulting unknowns conservatively."""
+    level = str(value or default).strip().lower()
+    return level if level in ADMISSIBILITY_LEVELS else default
+
+
+def admissibility_rank(value: str | None) -> int:
+    """Ordinal rank for admissibility comparisons."""
+    return ADMISSIBILITY_LEVELS.index(normalize_admissibility(value))
+
 
 # ---------------------------------------------------------------------------
 # Recall-backend config
@@ -197,6 +211,9 @@ class EngineConfig:
     status_map: dict[str, str] = field(
         default_factory=lambda: dict(DEFAULT_STATUS_MAP))
     distill_instructions: str = DEFAULT_DISTILL_INSTRUCTIONS
+    require_confidence_for_types: list[str] = field(default_factory=list)
+    valid_confidences: list[str] = field(
+        default_factory=lambda: ["low", "medium", "high"])
     # Advisory size ceiling (bytes) for the hot-surface audit.
     oversize_bytes: int = 51_200
 
@@ -277,7 +294,96 @@ class PackRequest:
     # cap on hot artifacts and cold evidence items included
     max_hot: int = 8
     max_cold: int = 3
+    max_admissibility: str = "internal"
     # explicit extra exclusions / assumptions / risks the caller wants recorded
     exclusions: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
+
+
+@dataclass
+class PackDefaults:
+    """Reusable pack defaults loaded from a project/profile config."""
+
+    max_hot: Optional[int] = None
+    max_cold: Optional[int] = None
+    max_admissibility: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "PackDefaults":
+        data = data or {}
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+    def merged(self, other: "PackDefaults") -> "PackDefaults":
+        return PackDefaults(
+            max_hot=other.max_hot if other.max_hot is not None else self.max_hot,
+            max_cold=other.max_cold if other.max_cold is not None else self.max_cold,
+            max_admissibility=(
+                other.max_admissibility
+                if other.max_admissibility is not None else self.max_admissibility),
+        )
+
+
+@dataclass
+class ProjectPackConfig:
+    """Pack defaults and per-role overrides for a project/profile config."""
+
+    defaults: PackDefaults = field(default_factory=PackDefaults)
+    roles: dict[str, PackDefaults] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "ProjectPackConfig":
+        data = data or {}
+        roles = {
+            str(role): PackDefaults.from_dict(value)
+            for role, value in dict(data.get("roles") or {}).items()
+        }
+        return cls(defaults=PackDefaults.from_dict(data.get("defaults")), roles=roles)
+
+    def for_role(self, role: str) -> PackDefaults:
+        return self.defaults.merged(self.roles.get(role, PackDefaults()))
+
+
+@dataclass
+class ProjectConfig:
+    """Reusable project/profile defaults layered on top of engine config."""
+
+    project: str = ""
+    profile: str = ""
+    objective: str = ""
+    prefer_domains: list[str] = field(default_factory=list)
+    exclusions: list[str] = field(default_factory=list)
+    assumptions: list[str] = field(default_factory=list)
+    packs: ProjectPackConfig = field(default_factory=ProjectPackConfig)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> "ProjectConfig":
+        data = dict(data or {})
+        packs = ProjectPackConfig.from_dict(data.pop("packs", None))
+        known = {f.name for f in fields(cls)} - {"packs"}
+        kwargs = {k: v for k, v in data.items() if k in known}
+        return cls(packs=packs, **kwargs)
+
+    def to_pack_request(
+        self, *, role: str, task: str, project: str | None = None,
+        objective: str | None = None, max_hot: int | None = None,
+        max_cold: int | None = None, max_admissibility: str | None = None,
+    ) -> PackRequest:
+        defaults = self.packs.for_role(role)
+        resolved_project = project or self.project or self.profile
+        resolved_objective = objective if objective is not None else self.objective
+        return PackRequest(
+            project=resolved_project,
+            role=role,
+            task=task,
+            objective=resolved_objective or "",
+            max_hot=max_hot if max_hot is not None else (
+                defaults.max_hot if defaults.max_hot is not None else 8),
+            max_cold=max_cold if max_cold is not None else (
+                defaults.max_cold if defaults.max_cold is not None else 3),
+            max_admissibility=normalize_admissibility(
+                max_admissibility or defaults.max_admissibility),
+            exclusions=list(self.exclusions),
+            assumptions=list(self.assumptions),
+        )
